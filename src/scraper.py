@@ -104,7 +104,7 @@ def extract_restaurant_metadata(elem):
 
 
 def is_inspection_row(elem):
-    """"""
+    """Determines if a row we're looking at is the correct inspection row."""
     is_tr = elem.name == 'tr'
     if not is_tr:
         return False
@@ -117,6 +117,7 @@ def is_inspection_row(elem):
 
 
 def extract_score_data(elem):
+    """Give us the score data we want back."""
     inspection_rows = elem.find_all(is_inspection_row)
     samples = len(inspection_rows)
     total = high_score = average = 0
