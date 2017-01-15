@@ -1,5 +1,9 @@
 # basic-scraper
 
+A basic scraper built by following the tutorial at https://codefellows.github.io/sea-python-401d5/assignments/tutorials/scraper.html
+
+Test data taken from http://info.kingcounty.gov/health/ehs/foodsafety/inspections/Results.aspx?Output=W&Business_Name=&Business_Address=&Longitude=&Latitude=&City=&Zip_Code=98109&Inspection_Type=All&Inspection_Start=2/1/2013&Inspection_End=2/1/2015&Inspection_Closed_Business=A&Violation_Points=&Violation_Red_Points=&Violation_Descr=&Fuzzy_Search=N&Sort=B
+
 ##Methods
 ```
 get_inspection_page(**kwargs):
