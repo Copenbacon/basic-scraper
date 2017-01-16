@@ -6,6 +6,8 @@ import io
 from bs4 import BeautifulSoup
 import sys
 import re
+import geocoder
+import json
 
 
 INSPECTION_DOMAIN = 'http://info.kingcounty.gov'
@@ -57,21 +59,23 @@ def load_inspection_page(src):
 
 
 def parse_source(html, encoding='utf-8'):
-    """Set up the HTML as DOM nodes for scraping. Takes the response body (or
+    u"""Set up the HTML as DOM nodes for scraping. Takes the response body (or
     the file read from disk) and parses it using BeautifulSoup. Returns the
-    parsed object for further processing."""
+    parsed object for further processing.
+    """
     return BeautifulSoup(html, 'html5lib')
 
 
 def extract_data_listings(html):
-    """Find the container that holds each individual listing."""
+    u"""Find the container that holds each individual listing."""
     id_finder = re.compile(r'PR[\d]+~')
     return html.find_all('div', id=id_finder)
 
 
 def has_two_tds(elem):
-    """Take an element as an argument and return True if the element is both a
-    <tr> and contains exactly two <td> elements immediately within it."""
+    u"""Take an element as an argument and return True if the element is both a
+    <tr> and contains exactly two <td> elements immediately within it.
+    """
     is_tr = elem.name == 'tr'
     td_children = elem.find_all('td', recursive=False)
     has_two = len(td_children) == 2
@@ -79,7 +83,7 @@ def has_two_tds(elem):
 
 
 def clean_data(td):
-    """Clean up the values we get from scraping."""
+    u"""Clean up the values we get from scraping."""
     data = td.string
     try:
         return data.strip(" \n:-")
@@ -88,8 +92,9 @@ def clean_data(td):
 
 
 def extract_restaurant_metadata(elem):
-    """Take the listing for a single restaurant, and return a Python
-    dictionary containing the metadata we’ve extracted."""
+    u"""Take the listing for a single restaurant, and return a Python
+    dictionary containing the metadata we’ve extracted.
+    """
     metadata_rows = elem.find('tbody').find_all(
         has_two_tds, recursive=False
     )
@@ -104,7 +109,7 @@ def extract_restaurant_metadata(elem):
 
 
 def is_inspection_row(elem):
-    """Determines if a row we're looking at is the correct inspection row."""
+    u"""Determine if a row we're looking at is the correct inspection row."""
     is_tr = elem.name == 'tr'
     if not is_tr:
         return False
@@ -117,7 +122,7 @@ def is_inspection_row(elem):
 
 
 def extract_score_data(elem):
-    """Give us the score data we want back."""
+    u"""Give us the score data we want back."""
     inspection_rows = elem.find_all(is_inspection_row)
     samples = len(inspection_rows)
     total = high_score = average = 0
@@ -140,19 +145,63 @@ def extract_score_data(elem):
     return data
 
 
-if __name__ == '__main__':
+def generate_results(test=False, count=10):
+    u"""Generate a set of results given the input, so we can then iterate over 
+    the results and geocode them individually.
+    """
     kwargs = {
         'Inspection_Start': '2/1/2013',
         'Inspection_End': '2/1/2015',
         'Zip_Code': '98109'
     }
-    if len(sys.argv) > 1 and sys.argv[1] == 'test':
+    if test:
         html, encoding = load_inspection_page('inspection_page.html')
     else:
         html, encoding = get_inspection_page(**kwargs)
     doc = parse_source(html, encoding)
     listings = extract_data_listings(doc)
-    for listing in listings[:5]:
+    for listing in listings[:count]:
         metadata = extract_restaurant_metadata(listing)
         score_data = extract_score_data(listing)
-        print(score_data)
+        metadata.update(score_data)
+        yield metadata
+
+
+def get_geojson(result):
+    u"""Take a result from our search as it’s input, get geocoding data from
+    google using the address of the restaurant and return the geojson
+    representation of that data.
+    """
+    address = " ".join(result.get('Address', ''))
+    if not address:
+        return None
+    geocoded = geocoder.google(address)
+    geojson = geocoded.geojson
+    inspection_data = {}
+    use_keys = (
+        'Business Name', 'Average Score', 'Total Inspections', 'High Score',
+        'Address',
+    )
+    for key, val in result.items():
+        if key not in use_keys:
+            continue
+        if isinstance(val, list):
+            val = " ".join(val)
+        inspection_data[key] = val
+    new_address = geojson['properties'].get('address')
+    if new_address:
+        inspection_data['Address'] = new_address
+    geojson['properties'] = inspection_data
+    return geojson
+
+
+if __name__ == '__main__':
+    import pprint
+    test = len(sys.argv) > 1 and sys.argv[1] == 'test'
+    total_result = {'type': 'FeatureCollection', 'features': []}
+    for result in generate_results(test):
+        geo_result = get_geojson(result)
+        pprint.pprint(geo_result)
+        total_result['features'].append(geo_result)
+    with open('my_map.json', 'w') as fh:
+        json.dump(total_result, fh)
