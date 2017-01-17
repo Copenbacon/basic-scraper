@@ -136,7 +136,7 @@ def extract_score_data(elem):
             total += intval
             high_score = intval if intval > high_score else high_score
     if samples:
-        average = total/float(samples)
+        average = total / float(samples)
     data = {
         u'Average Score': average,
         u'High Score': high_score,
